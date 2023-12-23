@@ -3,7 +3,7 @@ const cors = require('cors');
 const res = require('express/lib/response');
 const app = express();
 const port = process.env.PORT || 5000;
-
+const jwt = require('jsonwebtoken');
 require('dotenv').config()
 const bcrypt = require('bcrypt');
 app.use(cors())
@@ -14,13 +14,28 @@ const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster
 
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
+function authenticateToken(req, res, next) {
+    const token = req.headers.authorization;
+    if (!token) {
+        return res.status(401).json({ error: 'Unauthorized - No token provided' });
+    }
 
+    jwt.verify(token, 'your-secret-key', (err, user) => {
+        if (err) {
+            return res.status(403).json({ error: 'Forbidden - Invalid token' });
+        }
+        req.user = user;
+
+        next();
+    });
+}
 
 async function run() {
     try {
         await client.connect();
         const productCollection = client.db("classicIt").collection("products");
         const userCollection = client.db("classicIt").collection("users");
+
 
         // Get all product
         app.get("/products", async (req, res) => {
@@ -37,27 +52,125 @@ async function run() {
             res.send(product);
         })
 
-        // Create user 
-        app.post("/register", async (req, res) => {
-            const { username, email, password } = req.body;
+        //Add to cart api
+        app.post("/cart/:email", async (req, res) => {
+            const email = req.params.email;
+            const { product, quantity, size, color } = req.body;
+
 
             try {
+                const user = await userCollection.findOne({ email });
+                if (!user) {
+                    return res.status(404).json({ error: 'User not found' });
+                }
+                if (!user.cart) {
+                    user.cart = [];
+                }
+                const existingProduct = user.cart.find(item => item.color === color || item.size === size);
+
+                if (existingProduct) {
+                    existingProduct.quantity += quantity;
+                } else {
+                    user.cart.push({ product, quantity, size, color });
+                }
+                await userCollection.updateOne({ email }, { $set: { cart: user.cart } });
+
+                res.status(200).json({ message: 'Product added to cart successfully', cart: user.cart });
+            } catch (error) {
+                console.error(error);
+                res.status(500).json({ error: 'Internal Server Error' });
+            }
+        });
+
+        //Get cart item
+        app.get("/cart/:email", async (req, res) => {
+            const email = req.params.email;
+
+            try {
+                const user = await userCollection.findOne({ email });
+
+                if (!user) {
+                    return res.status(404).json({ error: 'User not found' });
+                }
+
+                const cartItems = user.cart || [];
+
+                res.status(200).json({ cart: cartItems });
+            } catch (error) {
+                console.error(error);
+                res.status(500).json({ error: 'Internal Server Error' });
+            }
+        });
+
+
+        // get user
+        app.get('/api/user', authenticateToken, (req, res) => {
+            res.json(req.user);
+        });
+
+        function authenticateToken(req, res, next) {
+            const token = req.headers.authorization;
+
+            if (!token) {
+                return res.status(401).json({ error: 'Unauthorized' });
+            }
+
+            jwt.verify(token, 'secret-key', (err, user) => {
+                if (err) {
+                    return res.status(403).json({ error: 'Forbidden' });
+                }
+
+                req.user = user;
+                next();
+            });
+        }
+
+        // Register route
+        app.post('/api/register', async (req, res) => {
+            try {
+                const { username, email, password } = req.body;
+
+                // Check if the username already exists
                 const existingUser = await userCollection.findOne({ email });
                 if (existingUser) {
-                    return res.status(400).json({ error: 'Username already exists' });
+                    return res.status(400).send('user already exists');
                 }
                 const hashedPassword = await bcrypt.hash(password, 10);
+
                 const newUser = {
                     username,
                     email,
                     password: hashedPassword,
-                    login: true
                 };
                 const result = await userCollection.insertOne(newUser);
-                res.status(200).json({ message: 'User registered successfully', insertedId: result.insertedId });
+                const token = jwt.sign({ email: newUser.email, name: newUser.name }, 'secret-key');
+                res.status(200).json({ token, insertedId: result.insertedId });
             } catch (error) {
                 console.error(error);
-                res.status(500).json({ error: 'Internal Server Error' });
+                res.status(500).send('Internal Server Error');
+            }
+        });
+
+        app.post('/api/login', async (req, res) => {
+            try {
+                const { email, password } = req.body;
+                const user = await userCollection.findOne({ email });
+
+                if (!user) {
+                    return res.status(401).send('Invalid credentials');
+                }
+
+                const isPasswordValid = await bcrypt.compare(password, user.password);
+
+                if (!isPasswordValid) {
+                    return res.status(401).send('Invalid credentials');
+                }
+
+                const token = jwt.sign({ email: user.email, name: user.name }, 'secret-key');
+                res.json({ token });
+            } catch (error) {
+                console.error(error);
+                res.status(500).send('Internal Server Error');
             }
         });
 
@@ -73,19 +186,8 @@ async function run() {
                 }
                 const passwordMatch = await bcrypt.compare(password, user.password);
                 if (passwordMatch) {
-                    const currentTime = new Date();
-                    await userCollection.updateOne(
-                        { email },
-                        {
-                            $set: {
-                                login: true,
-                                lastLogin: currentTime,
-                            },
-                        }
-                    );
-
-                    // Send back additional information if needed
-                    res.status(200).json({ message: 'Login successful', loggedIn: true, lastLogin: currentTime });
+                    const token = jwt.sign({ email: user.email, name: user.name }, 'secret-key');
+                    res.status(200).json({ token, message: 'Login successful' });
                 } else {
                     res.status(401).json({ error: 'Incorrect password' });
                 }
@@ -95,24 +197,6 @@ async function run() {
             }
         });
 
-
-        // Logout
-        app.post("/logout/:email", async (req, res) => {
-            const { email } = req.body;
-
-            try {
-                const user = await userCollection.findOne({ email });
-                if (!user) {
-                    return res.status(404).json({ error: 'User not found' });
-                }
-                await userCollection.updateOne({ email }, { $set: { login: false } });
-
-                res.status(200).json({ message: 'Logout successful', login: false });
-            } catch (error) {
-                console.error(error);
-                res.status(500).json({ error: 'Internal Server Error' });
-            }
-        });
 
 
 
