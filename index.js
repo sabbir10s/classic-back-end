@@ -9,7 +9,8 @@ app.use(cors())
 app.use(express.json())
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const uri = `mongodb+srv://${process.env.APP_USER}:${process.env.APP_PASS}@cluster0.x22e7.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.xghhlxf.mongodb.net/?retryWrites=true&w=majority`;
+
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
 
@@ -20,6 +21,10 @@ async function run() {
         const productCollection = client.db("classicIt").collection("products");
         const userCollection = client.db("classicIt").collection("users");
 
+        app.get("/product", async (req, res) => {
+            const products = await productCollection.find().toArray();
+            res.send(products);
+        })
 
     } finally {
         //   await client.close();
