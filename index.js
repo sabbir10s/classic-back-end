@@ -52,10 +52,10 @@ async function run() {
             res.send(product);
         })
 
-        //Add to cart api
+        //Add to cart
         app.post("/cart/:email", async (req, res) => {
             const email = req.params.email;
-            const { product, quantity, size, color } = req.body;
+            const { product, quantity, size, color, cart } = req.body;
 
 
             try {
@@ -66,8 +66,8 @@ async function run() {
                 if (!user.cart) {
                     user.cart = [];
                 }
-                const existingProduct = user.cart.find(item => item.color === color || item.size === size);
-
+                const existingProduct = user.cart.find(item => item.color === color && item.size === size);
+                console.log(existingProduct);
                 if (existingProduct) {
                     existingProduct.quantity += quantity;
                 } else {
@@ -143,7 +143,7 @@ async function run() {
                     password: hashedPassword,
                 };
                 const result = await userCollection.insertOne(newUser);
-                const token = jwt.sign({ email: newUser.email, name: newUser.name }, 'secret-key');
+                const token = jwt.sign({ email: newUser.email, name: newUser.username }, 'secret-key');
                 res.status(200).json({ token, insertedId: result.insertedId });
             } catch (error) {
                 console.error(error);
