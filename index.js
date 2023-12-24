@@ -125,7 +125,7 @@ async function run() {
             });
         }
 
-        // Register route
+        // Register user
         app.post('/api/register', async (req, res) => {
             try {
                 const { username, email, password } = req.body;
@@ -151,30 +151,7 @@ async function run() {
             }
         });
 
-        app.post('/api/login', async (req, res) => {
-            try {
-                const { email, password } = req.body;
-                const user = await userCollection.findOne({ email });
-
-                if (!user) {
-                    return res.status(401).send('Invalid credentials');
-                }
-
-                const isPasswordValid = await bcrypt.compare(password, user.password);
-
-                if (!isPasswordValid) {
-                    return res.status(401).send('Invalid credentials');
-                }
-
-                const token = jwt.sign({ email: user.email, name: user.name }, 'secret-key');
-                res.json({ token });
-            } catch (error) {
-                console.error(error);
-                res.status(500).send('Internal Server Error');
-            }
-        });
-
-        // Login
+        // Login user
         app.post("/login", async (req, res) => {
             const { email, password } = req.body;
 
@@ -186,7 +163,7 @@ async function run() {
                 }
                 const passwordMatch = await bcrypt.compare(password, user.password);
                 if (passwordMatch) {
-                    const token = jwt.sign({ email: user.email, name: user.name }, 'secret-key');
+                    const token = jwt.sign({ email: user.email, name: user.username }, 'secret-key');
                     res.status(200).json({ token, message: 'Login successful' });
                 } else {
                     res.status(401).json({ error: 'Incorrect password' });
