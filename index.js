@@ -66,7 +66,6 @@ async function run() {
                     user.cart = [];
                 }
                 const existingProduct = user.cart.find(item => item.color === color && item.size === size);
-                console.log(existingProduct);
                 if (existingProduct) {
                     existingProduct.quantity += quantity;
                 } else {
