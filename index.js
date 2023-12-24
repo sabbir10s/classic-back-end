@@ -141,7 +141,7 @@ async function run() {
                     password: hashedPassword,
                 };
                 const result = await userCollection.insertOne(newUser);
-                const token = jwt.sign({ email: newUser.email, name: newUser.username }, 'secret-key');
+                const token = jwt.sign({ email: newUser.email, name: newUser.username }, process.env.ACCESS_TOKEN_SECRET);
                 res.status(200).json({ token, insertedId: result.insertedId });
             } catch (error) {
                 console.error(error);
@@ -161,7 +161,7 @@ async function run() {
                 }
                 const passwordMatch = await bcrypt.compare(password, user.password);
                 if (passwordMatch) {
-                    const token = jwt.sign({ email: user.email, name: user.username }, 'secret-key');
+                    const token = jwt.sign({ email: user.email, name: user.username }, process.env.ACCESS_TOKEN_SECRET);
                     res.status(200).json({ token, message: 'Login successful' });
                 } else {
                     res.status(401).json({ error: 'Incorrect password' });
