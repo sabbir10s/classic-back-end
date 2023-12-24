@@ -103,7 +103,7 @@ async function run() {
 
 
         // get user
-        app.get('/api/user', authenticateToken, (req, res) => {
+        app.get('/user', authenticateToken, (req, res) => {
             res.json(req.user);
         });
 
@@ -125,7 +125,7 @@ async function run() {
         }
 
         // Register user
-        app.post('/api/register', async (req, res) => {
+        app.post('/register', async (req, res) => {
             try {
                 const { username, email, password } = req.body;
 
